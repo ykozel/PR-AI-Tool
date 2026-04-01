@@ -11,6 +11,7 @@ from app.api import uploads  # Import upload routes
 from app.api import documents  # Import document processing routes
 from app.api import ai_analysis  # Import AI analysis routes
 from app.api import profiles  # Import PR profile consolidation routes
+from app.api import info  # Import application info routes
 
 # Run schema migrations before creating tables so existing DBs stay in sync
 _migrate_add_employee_name()
@@ -168,6 +169,7 @@ Without a key it falls back to keyword-based pattern matching.
         }
 
     # Include routers
+    app.include_router(info.router)
     app.include_router(uploads.router)
     app.include_router(documents.router)
     app.include_router(ai_analysis.router)

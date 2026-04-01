@@ -18,6 +18,9 @@ class PRProfile(Base):
     employee_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
     year = Column(Integer)
     
+    # Link to previous year profile (for year navigation)
+    previous_year_profile_id = Column(Integer, ForeignKey("pr_profiles.id"), nullable=True)
+    
     # Summary sections
     skills_summary = Column(Text, nullable=True)
     

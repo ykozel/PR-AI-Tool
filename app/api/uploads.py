@@ -200,22 +200,34 @@ async def upload_doc(
 
         # 7. (Re)generate and store the HTML report
         html_updated = False
+        generation_status = ""
         if all_files:
             try:
                 generator = ReportGenerator()
+                
+                # Get year hierarchy for navigation
+                year_hierarchy = factory.get_pr_profile_repo().get_year_hierarchy(person_name, review_year)
+                year_hierarchy["person_name"] = person_name
+                
                 html = generator.generate_html(
                     file_records=all_files,
                     employee_name=person_name,
                     review_year=review_year,
+                    year_hierarchy=year_hierarchy,
                 )
                 factory.get_pr_profile_repo().update_html(profile, html)
                 html_updated = True
+                generation_status = f"HTML profile updated from {len(all_files)} document(s)."
                 logger.info(
                     f"HTML report updated for {person_name} ({review_year}), "
-                    f"profile_id={profile.id}, files={len(all_files)}"
+                    f"profile_id={profile.id}, files={len(all_files)}, "
+                    f"linked_to_year={year_hierarchy.get('previous_year', 'N/A')}"
                 )
             except Exception as exc:
+                generation_status = f"HTML generation failed: {str(exc)}"
                 logger.error(f"HTML generation failed for profile {profile.id}: {exc}", exc_info=True)
+        else:
+            generation_status = f"No files with extracted text yet. HTML will update when documents are processed. ({len(all_files)} files in profile)"
 
         return SmartUploadResponse(
             upload_id=db_file.id,
@@ -226,7 +238,8 @@ async def upload_doc(
             html_updated=html_updated,
             message=(
                 f"Uploaded '{file.filename}' for {person_name} ({review_year}). "
-                + ("HTML profile updated." if html_updated else "Text extraction failed; HTML not updated.")
+                + f"Text extraction: {'OK' if extracted_text else 'FAILED'}. "
+                + generation_status
             ),
         )
 

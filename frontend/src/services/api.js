@@ -92,4 +92,14 @@ export function renameProfile(personName, year, newName) {
     .then((r) => r.data)
 }
 
+/**
+ * GET /api/profiles/years/{personName}/{year}
+ * Returns year navigation hierarchy
+ */
+export function getYearHierarchy(personName, year) {
+  return apiClient
+    .get(`/api/profiles/years/${encodeURIComponent(personName)}/${year}`)
+    .then((r) => r.data)
+}
+
 export default apiClient

@@ -107,6 +107,42 @@ def get_profile_html(
     )
 
 
+@router.get(
+    "/years/{person_name}/{year}",
+    summary="Get year navigation hierarchy for a person",
+    description=(
+        "Returns year navigation information for a specific person+year combination, "
+        "including lists of all available years, previous year, and next year."
+    ),
+)
+def get_year_hierarchy(
+    person_name: str,
+    year: int,
+    db: Session = Depends(get_db),
+):
+    """Get year hierarchy and navigation info for a person+year."""
+    factory = RepositoryFactory(db)
+    year_info = factory.get_pr_profile_repo().get_year_hierarchy(person_name, year)
+    
+    # Enrich with profile info for each year
+    years_data = {}
+    for yr in year_info["all_years"]:
+        profile = factory.get_pr_profile_repo().get_by_name_year(person_name, yr)
+        years_data[yr] = {
+            "year": yr,
+            "has_html": bool(profile.html_report) if profile else False,
+        }
+    
+    return {
+        "person_name": person_name,
+        "current_year": year_info["current_year"],
+        "all_years": year_info["all_years"],
+        "previous_year": year_info["previous_year"],
+        "next_year": year_info["next_year"],
+        "years_data": years_data,
+    }
+
+
 @router.post(
     "/html/{person_name}/{year}/regenerate",
     summary="Regenerate the HTML profile from all linked uploads",
@@ -149,10 +185,17 @@ def regenerate_profile_html(
         )
 
     try:
+        factory = RepositoryFactory(db)
+        
+        # Get year hierarchy for navigation
+        year_hierarchy = factory.get_pr_profile_repo().get_year_hierarchy(person_name, year)
+        year_hierarchy["person_name"] = person_name
+        
         html = _report_generator.generate_html(
             file_records=files,
             employee_name=person_name,
             review_year=year,
+            year_hierarchy=year_hierarchy,
         )
     except Exception as exc:
         logger.error(f"HTML regeneration failed for {person_name}/{year}: {exc}", exc_info=True)

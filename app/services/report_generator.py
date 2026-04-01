@@ -114,6 +114,54 @@ blockquote p { margin: 0; font-style: italic; }
 }
 .improvement-note p { margin: 0; line-height: 1.6; }
 strong { font-weight: 700; }
+
+/* ── Year navigation ── */
+.year-navigation {
+  background: #f0f5ff;
+  border: 1px solid #d4e3ff;
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+.year-navigation-title {
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+.year-links {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.year-link {
+  display: inline-block;
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #d4e3ff;
+  border-radius: 3px;
+  color: #4183c4;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.year-link:hover {
+  background: #4183c4;
+  color: white;
+  text-decoration: none;
+}
+.year-link.current {
+  background: #4183c4;
+  color: white;
+  border-color: #4183c4;
+  cursor: default;
+}
+.year-separator {
+  color: #999;
+  margin: 0 4px;
+}
 """
 
 # ---------------------------------------------------------------------------
@@ -385,6 +433,7 @@ class ReportGenerator:
         employee_role: str = "",
         current_project: str = "",
         review_year: Optional[int] = None,
+        year_hierarchy: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Build and return a self-contained HTML string.
@@ -395,6 +444,8 @@ class ReportGenerator:
             employee_role:   Current role / title.
             current_project: Current project assignment.
             review_year:     Review year (defaults to current year).
+            year_hierarchy:  Optional year navigation dict with keys:
+                            - current_year, all_years, previous_year, next_year
         """
         year = review_year or datetime.utcnow().year
         combined = self._combine_texts(file_records)
@@ -408,7 +459,7 @@ class ReportGenerator:
                 file_records, employee_name, employee_role, current_project, year
             )
 
-        return self._render(data)
+        return self._render(data, year_hierarchy=year_hierarchy)
 
     # ------------------------------------------------------------------
     # Text combination
@@ -639,10 +690,10 @@ class ReportGenerator:
     # HTML rendering
     # ------------------------------------------------------------------
 
-    def _render(self, data: PRReportData) -> str:
+    def _render(self, data: PRReportData, year_hierarchy: Optional[Dict[str, Any]] = None) -> str:
         slug = _slug(data.employee_name)
         toc = self._toc_html(data, slug)
-        body = self._body_html(data, slug)
+        body = self._body_html(data, slug, year_hierarchy)
 
         return "".join(
             [
@@ -712,8 +763,12 @@ class ReportGenerator:
             "      </ul>\n"
         )
 
-    def _body_html(self, data: PRReportData, slug: str) -> str:
+    def _body_html(self, data: PRReportData, slug: str, year_hierarchy: Optional[Dict[str, Any]] = None) -> str:
         parts: List[str] = []
+
+        # ── Year Navigation ──────────────────────────────────────────────────
+        if year_hierarchy and year_hierarchy.get("all_years"):
+            parts.append(self._year_navigation_html(year_hierarchy))
 
         # ── Header ──────────────────────────────────────────────────────────
         parts.append(f'      <h1 id="{slug}">{_esc(data.employee_name)}</h1>\n')
@@ -735,6 +790,33 @@ class ReportGenerator:
         return "".join(parts)
 
     # ── Section renderers ────────────────────────────────────────────────────
+
+    def _year_navigation_html(self, year_hierarchy: Dict[str, Any]) -> str:
+        """Generate year navigation HTML allowing navigation between years."""
+        current = year_hierarchy.get("current_year")
+        all_years = year_hierarchy.get("all_years", [])
+        
+        if not all_years or len(all_years) <= 1:
+            return ""  # No navigation needed if only one year
+        
+        # Build year links
+        year_links = []
+        for yr in all_years:
+            if yr == current:
+                year_links.append(f'      <a href="#" class="year-link current">{yr}</a>\n')
+            else:
+                year_links.append(f'      <a href="/profile/{_esc(year_hierarchy.get("person_name", ""))}/{yr}" class="year-link">{yr}</a>\n')
+        
+        year_links_html = "".join(year_links)
+        
+        return (
+            '      <div class="year-navigation">\n'
+            '        <div class="year-navigation-title">Available Years</div>\n'
+            '        <div class="year-links">\n'
+            + year_links_html +
+            '        </div>\n'
+            '      </div>\n\n'
+        )
 
     def _skills_html(self, data: PRReportData) -> str:
         p: List[str] = ['      <h2 id="skills-summary">Skills summary</h2>\n']
