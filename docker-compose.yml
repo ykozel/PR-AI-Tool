@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: prprofile_db
+    environment:
+      POSTGRES_USER: prprofile_user
+      POSTGRES_PASSWORD: prprofile_password
+      POSTGRES_DB: prprofile_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prprofile_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prprofile_backend
+    environment:
+      DATABASE_URL: postgresql://prprofile_user:prprofile_password@db:5432/prprofile_db
+      DEBUG: "False"
+      SECRET_KEY: your-secret-key-change-in-production
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    image: node:18-alpine
+    container_name: prprofile_frontend
+    working_dir: /app
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_APP_NAME: PR Profile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev"
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: prprofile_network

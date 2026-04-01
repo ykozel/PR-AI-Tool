@@ -65,16 +65,6 @@ desktop.ini
 # Keep migrations/ tracked; ignore only the generated env artefact if present
 alembic/versions/__pycache__/
 
-# ── Frontend (Node.js / React / Vite) ─────────────────────────────────────────
-node_modules/
-npm-debug.log*
-yarn-error.log*
-.vite/
-package-lock.json
-
-# ── Docker artefacts ──────────────────────────────────────────────────────────
-.dockerignore
-
 # ── Temporary / scratch files ─────────────────────────────────────────────────
 *.tmp
 *.bak
