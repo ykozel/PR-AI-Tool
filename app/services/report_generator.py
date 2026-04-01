@@ -162,6 +162,64 @@ strong { font-weight: 700; }
   color: #999;
   margin: 0 4px;
 }
+
+/* ── Year-over-Year Analysis Section ── */
+#achievements-yoy {
+  border-top: 3px solid #28a745;
+  padding-top: 24px;
+  margin-top: 48px;
+}
+#achievements-yoy blockquote {
+  border-left: 4px solid #28a745;
+  background: #f0fdf4;
+  color: #1a5a2a;
+}
+#achievements-yoy h3 {
+  color: #1a5a2a;
+  margin-top: 20px;
+}
+#achievements-yoy ul {
+  margin-left: 26px;
+}
+#achievements-yoy li {
+  margin-bottom: 8px;
+  line-height: 1.65;
+}
+
+/* ── Areas for Improvement Section ── */
+#areas-for-improvement-yoy {
+  border-top: 3px solid #fd7e14;
+  padding-top: 24px;
+  margin-top: 48px;
+  background: #fffbf5;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-bottom: 20px;
+  margin-left: -20px;
+  margin-right: -20px;
+  border-left: 4px solid #fd7e14;
+}
+#areas-for-improvement-yoy blockquote {
+  border-left: 4px solid #fd7e14;
+  background: #fff3e0;
+  color: #6b4423;
+}
+#areas-for-improvement-yoy h3 {
+  color: #6b4423;
+  margin-top: 20px;
+}
+#areas-for-improvement-yoy ul {
+  margin-left: 26px;
+}
+#areas-for-improvement-yoy li {
+  margin-bottom: 8px;
+  line-height: 1.65;
+  color: #5a3a1a;
+}
+#areas-for-improvement-yoy h2 {
+  color: #fd7e14;
+  border-bottom-color: #fd7e14;
+}
 """
 
 # ---------------------------------------------------------------------------
@@ -434,6 +492,7 @@ class ReportGenerator:
         current_project: str = "",
         review_year: Optional[int] = None,
         year_hierarchy: Optional[Dict[str, Any]] = None,
+        yoy_analysis: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Build and return a self-contained HTML string.
@@ -446,6 +505,9 @@ class ReportGenerator:
             review_year:     Review year (defaults to current year).
             year_hierarchy:  Optional year navigation dict with keys:
                             - current_year, all_years, previous_year, next_year
+            yoy_analysis:    Optional YOY analysis dict with keys:
+                            - new_achievements, new_skills, skill_progression, growth_areas,
+                            - promotion_or_change, summary, overall_assessment
         """
         year = review_year or datetime.utcnow().year
         combined = self._combine_texts(file_records)
@@ -459,7 +521,7 @@ class ReportGenerator:
                 file_records, employee_name, employee_role, current_project, year
             )
 
-        return self._render(data, year_hierarchy=year_hierarchy)
+        return self._render(data, year_hierarchy=year_hierarchy, yoy_analysis=yoy_analysis)
 
     # ------------------------------------------------------------------
     # Text combination
@@ -690,10 +752,10 @@ class ReportGenerator:
     # HTML rendering
     # ------------------------------------------------------------------
 
-    def _render(self, data: PRReportData, year_hierarchy: Optional[Dict[str, Any]] = None) -> str:
+    def _render(self, data: PRReportData, year_hierarchy: Optional[Dict[str, Any]] = None, yoy_analysis: Optional[Dict[str, Any]] = None) -> str:
         slug = _slug(data.employee_name)
-        toc = self._toc_html(data, slug)
-        body = self._body_html(data, slug, year_hierarchy)
+        toc = self._toc_html(data, slug, yoy_analysis=yoy_analysis)
+        body = self._body_html(data, slug, year_hierarchy, yoy_analysis=yoy_analysis)
 
         return "".join(
             [
@@ -723,7 +785,7 @@ class ReportGenerator:
             ]
         )
 
-    def _toc_html(self, data: PRReportData, slug: str) -> str:
+    def _toc_html(self, data: PRReportData, slug: str, yoy_analysis: Optional[Dict[str, Any]] = None) -> str:
         name = _esc(data.employee_name)
 
         # Feedback sub-links in canonical order
@@ -743,6 +805,20 @@ class ReportGenerator:
 
         fb_sub = "".join(fb_links)
 
+        # Build YOY links if analysis exists
+        yoy_links = ""
+        if yoy_analysis:
+            yoy_links = '            <li><a href="#achievements-yoy">Achievements over a year</a></li>\n'
+            # Check if there are any concerns to report
+            has_concerns = any([
+                yoy_analysis.get("areas_of_concern"),
+                yoy_analysis.get("improvement_priorities"),
+                yoy_analysis.get("unmet_goals"),
+                yoy_analysis.get("overall_concerns"),
+            ])
+            if has_concerns:
+                yoy_links += '            <li><a href="#areas-for-improvement-yoy">What went wrong and needs improvement</a></li>\n'
+
         return (
             "      <ul>\n"
             f'        <li><a href="#{slug}">{name}</a>\n'
@@ -758,12 +834,13 @@ class ReportGenerator:
             )
             + "            </li>\n"
             '            <li><a href="#activity">Activity</a></li>\n'
-            "          </ul>\n"
+            + yoy_links
+            + "          </ul>\n"
             "        </li>\n"
             "      </ul>\n"
         )
 
-    def _body_html(self, data: PRReportData, slug: str, year_hierarchy: Optional[Dict[str, Any]] = None) -> str:
+    def _body_html(self, data: PRReportData, slug: str, year_hierarchy: Optional[Dict[str, Any]] = None, yoy_analysis: Optional[Dict[str, Any]] = None) -> str:
         parts: List[str] = []
 
         # ── Year Navigation ──────────────────────────────────────────────────
@@ -786,6 +863,21 @@ class ReportGenerator:
         parts.append(self._learning_html(data))
         parts.append(self._feedback_html(data))
         parts.append(self._activity_html(data))
+        
+        # ── Year-over-Year Analysis ──────────────────────────────────────────
+        if yoy_analysis:
+            parts.append(self._yoy_analysis_html(yoy_analysis))
+            
+            # ── Areas for Improvement Section ────────────────────────────────
+            # Check if there are concerns to report
+            has_concerns = any([
+                yoy_analysis.get("areas_of_concern"),
+                yoy_analysis.get("improvement_priorities"),
+                yoy_analysis.get("unmet_goals"),
+                yoy_analysis.get("overall_concerns"),
+            ])
+            if has_concerns:
+                parts.append(self._areas_for_improvement_html(yoy_analysis))
 
         return "".join(parts)
 
@@ -967,4 +1059,119 @@ class ReportGenerator:
                         p.append(f"        <li>{_esc(c)}</li>\n")
                     p.append("      </ul>\n\n")
 
+        return "".join(p)
+    def _yoy_analysis_html(self, yoy_analysis: Dict[str, Any]) -> str:
+        """Generate HTML section for year-over-year achievement analysis."""
+        p: List[str] = ['      <h2 id="achievements-yoy">Achievements over a year</h2>\n\n']
+        
+        # Overall summary at top
+        summary = yoy_analysis.get("summary", "")
+        if summary:
+            p.append('      <blockquote>\n')
+            p.append(f'        <p>{_esc(summary)}</p>\n')
+            p.append('      </blockquote>\n\n')
+        
+        # Promotion or role change
+        promotion = yoy_analysis.get("promotion_or_change", "")
+        if promotion:
+            p.append('      <h3>Role Changes</h3>\n')
+            p.append(f'      <p>{_esc(promotion)}</p>\n\n')
+        
+        # New achievements
+        new_achievements = yoy_analysis.get("new_achievements", [])
+        if new_achievements:
+            p.append('      <h3>New Achievements</h3>\n')
+            p.append('      <ul>\n')
+            for achievement in new_achievements:
+                p.append(f'        <li>{_esc(achievement)}</li>\n')
+            p.append('      </ul>\n\n')
+        
+        # New skills gained
+        new_skills = yoy_analysis.get("new_skills", [])
+        if new_skills:
+            p.append('      <h3>New Skills Gained</h3>\n')
+            p.append('      <ul>\n')
+            for skill in new_skills:
+                p.append(f'        <li>{_esc(skill)}</li>\n')
+            p.append('      </ul>\n\n')
+        
+        # Skill progression (from → to)
+        skill_progression = yoy_analysis.get("skill_progression", [])
+        if skill_progression:
+            p.append('      <h3>Skill Progression</h3>\n')
+            p.append('      <ul>\n')
+            for progression in skill_progression:
+                if isinstance(progression, dict):
+                    skill_name = progression.get("skill", "")
+                    from_level = progression.get("from", "")
+                    to_level = progression.get("to", "")
+                    p.append(f'        <li>{_esc(skill_name)}: {_esc(from_level)} → {_esc(to_level)}</li>\n')
+                else:
+                    p.append(f'        <li>{_esc(str(progression))}</li>\n')
+            p.append('      </ul>\n\n')
+        
+        # Growth areas / areas for development
+        growth_areas = yoy_analysis.get("growth_areas", [])
+        if growth_areas:
+            p.append('      <h3>Growth Areas for Next Year</h3>\n')
+            p.append('      <ul>\n')
+            for area in growth_areas:
+                p.append(f'        <li>{_esc(area)}</li>\n')
+            p.append('      </ul>\n\n')
+        
+        # Overall assessment
+        assessment = yoy_analysis.get("overall_assessment", "")
+        if assessment:
+            p.append('      <h3>Overall Assessment</h3>\n')
+            p.append(f'      <p>{_esc(assessment)}</p>\n')
+        
+        return "".join(p)
+
+    def _areas_for_improvement_html(self, yoy_analysis: Dict[str, Any]) -> str:
+        """Generate HTML section for areas that need improvement compared to previous year."""
+        p: List[str] = ['      <h2 id="areas-for-improvement-yoy">What went wrong and needs to be improved</h2>\n\n']
+        
+        # Overall concerns summary at top
+        overall_concerns = yoy_analysis.get("overall_concerns", "")
+        if overall_concerns:
+            p.append('      <blockquote>\n')
+            p.append(f'        <p>{_esc(overall_concerns)}</p>\n')
+            p.append('      </blockquote>\n\n')
+        
+        # Areas of concern / regression
+        areas_of_concern = yoy_analysis.get("areas_of_concern", [])
+        if areas_of_concern:
+            p.append('      <h3>Areas of Concern</h3>\n')
+            p.append('      <ul>\n')
+            for concern in areas_of_concern:
+                p.append(f'        <li>{_esc(concern)}</li>\n')
+            p.append('      </ul>\n\n')
+        
+        # Unmet goals from previous year
+        unmet_goals = yoy_analysis.get("unmet_goals", [])
+        if unmet_goals:
+            p.append('      <h3>Unmet Goals from Previous Year</h3>\n')
+            p.append('      <ul>\n')
+            for goal in unmet_goals:
+                p.append(f'        <li>{_esc(goal)}</li>\n')
+            p.append('      </ul>\n\n')
+        
+        # Feedback gaps
+        feedback_gaps = yoy_analysis.get("feedback_gaps", [])
+        if feedback_gaps:
+            p.append('      <h3>Feedback Gaps and Discrepancies</h3>\n')
+            p.append('      <ul>\n')
+            for gap in feedback_gaps:
+                p.append(f'        <li>{_esc(gap)}</li>\n')
+            p.append('      </ul>\n\n')
+        
+        # Improvement priorities
+        improvement_priorities = yoy_analysis.get("improvement_priorities", [])
+        if improvement_priorities:
+            p.append('      <h3>Priority Areas for Next Review Period</h3>\n')
+            p.append('      <ul>\n')
+            for priority in improvement_priorities:
+                p.append(f'        <li>{_esc(priority)}</li>\n')
+            p.append('      </ul>\n\n')
+        
         return "".join(p)

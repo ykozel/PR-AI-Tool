@@ -17,6 +17,7 @@ from app.schemas.profile import ConsolidatedProfileResponse
 from app.services.doc_processor import DocProcessor
 from app.services.profile_consolidator import ProfileConsolidator
 from app.services.report_generator import ReportGenerator
+from app.services.year_over_year_analyzer import YearOverYearAnalyzer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/profiles", tags=["pr-profiles"])
@@ -191,11 +192,56 @@ def regenerate_profile_html(
         year_hierarchy = factory.get_pr_profile_repo().get_year_hierarchy(person_name, year)
         year_hierarchy["person_name"] = person_name
         
+        # Try to generate YOY analysis
+        yoy_analysis = None
+        previous_profile = factory.get_pr_profile_repo().get_previous_profile(profile)
+        if previous_profile:
+            try:
+                previous_files = (
+                    db.query(UploadedFile)
+                    .filter(
+                        UploadedFile.pr_profile_id == previous_profile.id,
+                        UploadedFile.extracted_text.isnot(None),
+                    )
+                    .order_by(UploadedFile.uploaded_at)
+                    .all()
+                )
+                
+                if previous_files:
+                    # Combine texts from both years
+                    current_text = "\n\n".join(
+                        [f"[{f.file_type}] {f.original_filename}\n{f.extracted_text}" for f in files]
+                    )
+                    previous_text = "\n\n".join(
+                        [f"[{f.file_type}] {f.original_filename}\n{f.extracted_text}" for f in previous_files]
+                    )
+                    
+                    # Run YOY analysis
+                    yoy_result = YearOverYearAnalyzer.analyze_year_comparison(
+                        employee_name=person_name,
+                        previous_year=previous_profile.year,
+                        current_year=year,
+                        previous_year_text=previous_text,
+                        current_year_text=current_text,
+                    )
+                    
+                    if yoy_result:
+                        yoy_analysis = yoy_result
+                        # Store analysis in profile
+                        import json
+                        factory.get_pr_profile_repo().update_yoy_analysis(
+                            profile,
+                            json.dumps(yoy_result)
+                        )
+            except Exception as yoy_exc:
+                logger.warning(f"YOY analysis failed for {person_name}: {yoy_exc}")
+        
         html = _report_generator.generate_html(
             file_records=files,
             employee_name=person_name,
             review_year=year,
             year_hierarchy=year_hierarchy,
+            yoy_analysis=yoy_analysis,
         )
     except Exception as exc:
         logger.error(f"HTML regeneration failed for {person_name}/{year}: {exc}", exc_info=True)
@@ -210,7 +256,9 @@ def regenerate_profile_html(
         "year": year,
         "pr_profile_id": profile.id,
         "files_included": len(files),
-        "message": f"HTML report regenerated for '{person_name}' ({year}) from {len(files)} document(s).",
+        "yoy_analysis_generated": bool(yoy_analysis),
+        "message": f"HTML report regenerated for '{person_name}' ({year}) from {len(files)} document(s)." + 
+                   (f" YOY analysis included." if yoy_analysis else ""),
     }
 
 

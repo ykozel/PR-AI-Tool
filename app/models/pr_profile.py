@@ -27,7 +27,10 @@ class PRProfile(Base):
     # HTML report
     html_report = Column(Text, nullable=True)
     
-    # Comparison with previous year
+    # Year-over-year comparison (JSON)
+    yoy_analysis = Column(Text, nullable=True)  # Stores JSON from LLM comparison
+    
+    # Comparison with previous year (legacy)
     comparison_summary = Column(Text, nullable=True)
     new_achievements = Column(Text, nullable=True)
     

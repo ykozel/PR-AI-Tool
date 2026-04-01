@@ -205,6 +205,23 @@ class PRProfileRepository:
         self.db.refresh(profile)
         return profile
 
+    def update_yoy_analysis(self, profile: PRProfile, yoy_analysis_json: str) -> PRProfile:
+        """Store year-over-year analysis JSON"""
+        profile.yoy_analysis = yoy_analysis_json
+        self.db.add(profile)
+        self.db.commit()
+        self.db.refresh(profile)
+        logger.info(f"YOY analysis stored for profile {profile.id} ({profile.employee_name}/{profile.year})")
+        return profile
+
+    def get_previous_profile(self, profile: PRProfile) -> Optional[PRProfile]:
+        """Get the previous year profile for a given profile"""
+        if not profile.previous_year_profile_id:
+            return None
+        return self.db.query(PRProfile).filter(
+            PRProfile.id == profile.previous_year_profile_id
+        ).first()
+
     def list_all(self) -> List[PRProfile]:
         return (
             self.db.query(PRProfile)
