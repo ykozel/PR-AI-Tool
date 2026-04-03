@@ -70,6 +70,7 @@ h2 {
   margin-top: 36px; margin-bottom: 14px;
   color: #2c3e50;
   border-bottom: 1px solid #eaecef; padding-bottom: 8px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
 h3 {
   font-size: 1.05em; font-weight: 600;
@@ -286,6 +287,14 @@ h4.fb-heading:first-child { margin-top: 0; }
 .fb-attr p::before, .fb-attr p::after { content: none; }
 /* Plain paragraph text inside feedback block */
 p.fb-text { margin-bottom: 10px; color: #333; line-height: 1.7; }
+
+/* ── Section origin badges ── */
+.badge-ai, .badge-verbatim {
+  font-size: 0.58em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 2px 10px; border-radius: 10px; white-space: nowrap; flex-shrink: 0;
+}
+.badge-ai   { color: #1848b3; background: #eaf1ff; border: 1px solid #c2d6f8; }
+.badge-verbatim { color: #1a6b3c; background: #eaf4ee; border: 1px solid #b0d9be; }
 """
 
 # ---------------------------------------------------------------------------
@@ -973,7 +982,7 @@ class ReportGenerator:
         )
 
     def _skills_html(self, data: PRReportData) -> str:
-        p: List[str] = ['      <h2 id="skills-summary">Skills summary</h2>\n']
+        p: List[str] = ['      <h2 id="skills-summary">Skills summary <span class="badge-ai">AI generated</span></h2>\n']
 
         any_content = False
 
@@ -1026,7 +1035,7 @@ class ReportGenerator:
     def _certifications_html(self, data: PRReportData) -> str:
         raw = (data.certifications_text or "").strip()
         fallback = "Not applicable / not a focus during this review period"
-        p: List[str] = ['      <h2 id="certifications">Certifications</h2>\n']
+        p: List[str] = ['      <h2 id="certifications">Certifications <span class="badge-ai">AI generated</span></h2>\n']
         if not raw or raw == fallback:
             p.append(f'      <p>{_esc(fallback)}</p>\n\n')
             return ''.join(p)
@@ -1041,7 +1050,7 @@ class ReportGenerator:
         return ''.join(p)
 
     def _learning_html(self, data: PRReportData) -> str:
-        p: List[str] = ['      <h2 id="learning">Learning</h2>\n']
+        p: List[str] = ['      <h2 id="learning">Learning <span class="badge-ai">AI generated</span></h2>\n']
         if not data.learning:
             p.append('      <p>No learning items recorded.</p>\n')
         else:
@@ -1059,7 +1068,7 @@ class ReportGenerator:
         return ''.join(p)
 
     def _feedback_html(self, data: PRReportData) -> str:
-        p: List[str] = ['      <h2 id="feedback">Feedback</h2>\n']
+        p: List[str] = ['      <h2 id="feedback">Feedback <span class="badge-verbatim">Original</span></h2>\n']
 
         has_content = False
         for key in _ordered_feedback_keys(data.feedback_by_type):
@@ -1081,7 +1090,7 @@ class ReportGenerator:
         return "".join(p)
 
     def _activity_html(self, data: PRReportData) -> str:
-        p: List[str] = ['      <h2 id="activity">Activity</h2>\n']
+        p: List[str] = ['      <h2 id="activity">Activity <span class="badge-ai">AI generated</span></h2>\n']
 
         if not data.activity:
             p.append("      <p>No activity recorded.</p>\n")
@@ -1116,7 +1125,7 @@ class ReportGenerator:
 
     def _achievements_html(self, data: "PRReportData") -> str:
         """Render the GPT-synthesised achievements section."""
-        p: List[str] = ['      <h2 id="achievements">Achievements</h2>\n\n']
+        p: List[str] = ['      <h2 id="achievements">Achievements <span class="badge-ai">AI generated</span></h2>\n\n']
         if data.achievements_summary:
             p.append('      <blockquote>\n')
             p.append(f'        <p>{_esc(data.achievements_summary)}</p>\n')
@@ -1132,7 +1141,7 @@ class ReportGenerator:
 
     def _fallbacks_html(self, data: "PRReportData") -> str:
         """Render the GPT-synthesised fallbacks / areas for improvement section."""
-        p: List[str] = ['      <h2 id="fallbacks">Fallbacks</h2>\n\n']
+        p: List[str] = ['      <h2 id="fallbacks">Fallbacks <span class="badge-ai">AI generated</span></h2>\n\n']
         items = _clean_items(data.fallbacks, max_len=300)
         if items:
             p.append('      <ul>\n')
@@ -1306,7 +1315,7 @@ class ReportGenerator:
 
     def _yoy_analysis_html(self, yoy_analysis: Dict[str, Any]) -> str:
         """Generate HTML section for year-over-year achievement analysis."""
-        p: List[str] = ['      <h2 id="achievements-yoy">Achievements over a year</h2>\n\n']
+        p: List[str] = ['      <h2 id="achievements-yoy">Achievements over a year <span class="badge-ai">AI generated</span></h2>\n\n']
         
         # Overall summary at top
         summary = yoy_analysis.get("summary", "")
@@ -1373,7 +1382,7 @@ class ReportGenerator:
 
     def _areas_for_improvement_html(self, yoy_analysis: Dict[str, Any]) -> str:
         """Generate HTML section for areas that need improvement compared to previous year."""
-        p: List[str] = ['      <h2 id="areas-for-improvement-yoy">What went wrong and needs to be improved</h2>\n\n']
+        p: List[str] = ['      <h2 id="areas-for-improvement-yoy">What went wrong and needs to be improved <span class="badge-ai">AI generated</span></h2>\n\n']
         
         # Overall concerns summary at top
         overall_concerns = yoy_analysis.get("overall_concerns", "")
