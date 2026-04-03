@@ -1,5 +1,6 @@
 ﻿"""API routes for file upload and processing (refactored with DI and utilities)"""
 import hashlib
+import json
 import logging
 import os
 from datetime import datetime
@@ -39,6 +40,7 @@ from app.services.ai_analyzer import AIAnalyzer
 from app.services.file_processing_orchestrator import FileProcessingOrchestrator
 from app.services.report_generator import ReportGenerator
 from app.services.year_over_year_analyzer import YearOverYearAnalyzer
+from app.api.profiles import _collect_report_context
 from app.utils.file_validation import FileValidator, FileOperations
 from app.utils.file_upload import FileUploadManager
 
@@ -201,67 +203,12 @@ async def upload_doc(
 
         # 7. (Re)generate and store the HTML report
         html_updated = False
-        generation_status = ""
-        yoy_analysis = None
-        yoy_status = ""
-        
         if all_files:
             try:
                 generator = ReportGenerator()
-                
-                # Get year hierarchy for navigation
-                year_hierarchy = factory.get_pr_profile_repo().get_year_hierarchy(person_name, review_year)
-                year_hierarchy["person_name"] = person_name
-                
-                # Try to get YOY analysis if there's a previous year
-                previous_profile = factory.get_pr_profile_repo().get_previous_profile(profile)
-                if previous_profile:
-                    try:
-                        # Get all files from previous year
-                        previous_files = (
-                            db.query(UploadedFile)
-                            .filter(
-                                UploadedFile.pr_profile_id == previous_profile.id,
-                                UploadedFile.extracted_text.isnot(None),
-                            )
-                            .order_by(UploadedFile.uploaded_at)
-                            .all()
-                        )
-                        
-                        if previous_files:
-                            # Combine texts from both years
-                            current_text = "\n\n".join(
-                                [f"[{f.file_type}] {f.original_filename}\n{f.extracted_text}" for f in all_files]
-                            )
-                            previous_text = "\n\n".join(
-                                [f"[{f.file_type}] {f.original_filename}\n{f.extracted_text}" for f in previous_files]
-                            )
-                            
-                            # Run YOY analysis
-                            yoy_result = YearOverYearAnalyzer.analyze_year_comparison(
-                                employee_name=person_name,
-                                previous_year=previous_profile.year,
-                                current_year=review_year,
-                                previous_year_text=previous_text,
-                                current_year_text=current_text,
-                            )
-                            
-                            if yoy_result:
-                                yoy_analysis = yoy_result
-                                # Store analysis in profile
-                                import json
-                                factory.get_pr_profile_repo().update_yoy_analysis(
-                                    profile,
-                                    json.dumps(yoy_result)
-                                )
-                                yoy_status = f"YOY analysis generated comparing {previous_profile.year} to {review_year}."
-                            else:
-                                yoy_status = "YOY analysis attempted but no results returned."
-                    except Exception as yoy_exc:
-                        yoy_status = f"YOY analysis failed (non-blocking): {str(yoy_exc)}"
-                        logger.warning(f"YOY analysis failed for {person_name}: {yoy_exc}")
-                
-                # Generate HTML with optional YOY analysis
+                year_hierarchy, yoy_analysis = _collect_report_context(
+                    db, person_name, review_year, all_files
+                )
                 html = generator.generate_html(
                     file_records=all_files,
                     employee_name=person_name,
@@ -270,21 +217,17 @@ async def upload_doc(
                     yoy_analysis=yoy_analysis,
                 )
                 factory.get_pr_profile_repo().update_html(profile, html)
+                if yoy_analysis:
+                    profile.yoy_analysis = json.dumps(yoy_analysis)
+                    db.add(profile)
+                    db.commit()
                 html_updated = True
-                generation_status = f"HTML profile updated from {len(all_files)} document(s)."
-                if yoy_status:
-                    generation_status += f" {yoy_status}"
                 logger.info(
                     f"HTML report updated for {person_name} ({review_year}), "
-                    f"profile_id={profile.id}, files={len(all_files)}, "
-                    f"linked_to_year={year_hierarchy.get('previous_year', 'N/A')}, "
-                    f"yoy_analysis={'generated' if yoy_analysis else 'none'}"
+                    f"profile_id={profile.id}, files={len(all_files)}"
                 )
             except Exception as exc:
-                generation_status = f"HTML generation failed: {str(exc)}"
                 logger.error(f"HTML generation failed for profile {profile.id}: {exc}", exc_info=True)
-        else:
-            generation_status = f"No files with extracted text yet. HTML will update when documents are processed. ({len(all_files)} files in profile)"
 
         return SmartUploadResponse(
             upload_id=db_file.id,
@@ -295,8 +238,7 @@ async def upload_doc(
             html_updated=html_updated,
             message=(
                 f"Uploaded '{file.filename}' for {person_name} ({review_year}). "
-                + f"Text extraction: {'OK' if extracted_text else 'FAILED'}. "
-                + generation_status
+                + ("HTML profile updated." if html_updated else "Text extraction failed; HTML not updated.")
             ),
         )
 

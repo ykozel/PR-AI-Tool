@@ -165,37 +165,15 @@ class PRProfileRepository:
             .first()
         )
 
-    def get_most_recent_previous_year(self, employee_name: str, year: int) -> Optional[PRProfile]:
-        """Find the most recent profile for this employee with year < given year."""
-        return (
-            self.db.query(PRProfile)
-            .filter(
-                PRProfile.employee_name == employee_name, 
-                PRProfile.year < year
-            )
-            .order_by(PRProfile.year.desc())
-            .first()
-        )
-
     def find_or_create(self, employee_name: str, year: int) -> PRProfile:
         profile = self.get_by_name_year(employee_name, year)
         if profile:
             return profile
-        
-        # Find most recent previous year profile to link (not just year - 1)
-        # This allows linking 2027 to 2025 even if 2026 doesn't exist
-        previous_year_profile = self.get_most_recent_previous_year(employee_name, year)
-        
-        profile = PRProfile(
-            employee_name=employee_name, 
-            year=year,
-            previous_year_profile_id=previous_year_profile.id if previous_year_profile else None
-        )
+        profile = PRProfile(employee_name=employee_name, year=year)
         self.db.add(profile)
         self.db.commit()
         self.db.refresh(profile)
-        logger.info(f"Created PRProfile: employee_name={employee_name}, year={year}, id={profile.id}, "
-                   f"previous_year_id={profile.previous_year_profile_id} (linked to year {previous_year_profile.year if previous_year_profile else 'N/A'})")
+        logger.info(f"Created PRProfile: employee_name={employee_name}, year={year}, id={profile.id}")
         return profile
 
     def update_html(self, profile: PRProfile, html_content: str) -> PRProfile:
@@ -205,22 +183,23 @@ class PRProfileRepository:
         self.db.refresh(profile)
         return profile
 
-    def update_yoy_analysis(self, profile: PRProfile, yoy_analysis_json: str) -> PRProfile:
-        """Store year-over-year analysis JSON"""
-        profile.yoy_analysis = yoy_analysis_json
+    def get_all_years_for_employee(self, employee_name: str) -> List[int]:
+        """Return all review years for an employee, sorted ascending."""
+        rows = (
+            self.db.query(PRProfile.year)
+            .filter(PRProfile.employee_name == employee_name)
+            .order_by(PRProfile.year)
+            .all()
+        )
+        return [r[0] for r in rows]
+
+    def update_yoy_analysis(self, profile: PRProfile, yoy_json: str) -> PRProfile:
+        """Persist year-over-year analysis JSON on the profile."""
+        profile.yoy_analysis = yoy_json
         self.db.add(profile)
         self.db.commit()
         self.db.refresh(profile)
-        logger.info(f"YOY analysis stored for profile {profile.id} ({profile.employee_name}/{profile.year})")
         return profile
-
-    def get_previous_profile(self, profile: PRProfile) -> Optional[PRProfile]:
-        """Get the previous year profile for a given profile"""
-        if not profile.previous_year_profile_id:
-            return None
-        return self.db.query(PRProfile).filter(
-            PRProfile.id == profile.previous_year_profile_id
-        ).first()
 
     def list_all(self) -> List[PRProfile]:
         return (
@@ -229,30 +208,6 @@ class PRProfileRepository:
             .order_by(PRProfile.employee_name, PRProfile.year)
             .all()
         )
-    
-    def get_all_years_for_person(self, employee_name: str) -> List[int]:
-        """Get all years for a person, sorted ascending"""
-        profiles = (
-            self.db.query(PRProfile.year)
-            .filter(PRProfile.employee_name == employee_name)
-            .order_by(PRProfile.year)
-            .all()
-        )
-        return [p[0] for p in profiles]
-    
-    def get_year_hierarchy(self, employee_name: str, year: int) -> dict:
-        """Get year navigation info: previous_year, next_year, all_years"""
-        all_years = self.get_all_years_for_person(employee_name)
-        if year not in all_years:
-            return {"current_year": year, "all_years": all_years, "previous_year": None, "next_year": None}
-        
-        idx = all_years.index(year)
-        return {
-            "current_year": year,
-            "all_years": all_years,
-            "previous_year": all_years[idx - 1] if idx > 0 else None,
-            "next_year": all_years[idx + 1] if idx < len(all_years) - 1 else None,
-        }
 
 
 class RepositoryFactory:

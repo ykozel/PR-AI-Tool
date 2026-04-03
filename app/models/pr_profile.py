@@ -18,21 +18,16 @@ class PRProfile(Base):
     employee_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
     year = Column(Integer)
     
-    # Link to previous year profile (for year navigation)
-    previous_year_profile_id = Column(Integer, ForeignKey("pr_profiles.id"), nullable=True)
-    
     # Summary sections
     skills_summary = Column(Text, nullable=True)
     
     # HTML report
     html_report = Column(Text, nullable=True)
     
-    # Year-over-year comparison (JSON)
-    yoy_analysis = Column(Text, nullable=True)  # Stores JSON from LLM comparison
-    
-    # Comparison with previous year (legacy)
+    # Comparison with previous year
     comparison_summary = Column(Text, nullable=True)
     new_achievements = Column(Text, nullable=True)
+    yoy_analysis = Column(Text, nullable=True)  # JSON from YearOverYearAnalyzer
     
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
