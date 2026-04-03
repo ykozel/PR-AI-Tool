@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { downloadHtml, getHtmlPreviewUrl, regenerateHtml, renameProfile } from '../services/api'
+import { downloadHtml, getHtmlPreviewUrl, regenerateHtml, renameProfile, getYearHierarchy } from '../services/api'
 
 export default function ViewProfile() {
   const { personName, year } = useParams()
@@ -21,6 +21,9 @@ export default function ViewProfile() {
   const [renameMsg, setRenameMsg] = useState(null)
   const [renameError, setRenameError] = useState(null)
 
+  const [yearHierarchy, setYearHierarchy] = useState(null)
+  const [loadingYears, setLoadingYears] = useState(true)
+
   function loadPreview(name, yr) {
     setLoadingPreview(true)
     setPreviewError(null)
@@ -40,6 +43,19 @@ export default function ViewProfile() {
     return () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personName, year])
+
+  useEffect(() => {
+    setLoadingYears(true)
+    getYearHierarchy(decodedName, numYear)
+      .then((data) => {
+        setYearHierarchy(data)
+      })
+      .catch((e) => {
+        console.error('Failed to load year hierarchy:', e)
+        // Not fatal – just don't show year nav
+      })
+      .finally(() => setLoadingYears(false))
+  }, [decodedName, numYear])
 
   async function handleRegenerate() {
     setRegenerating(true)
@@ -101,6 +117,31 @@ export default function ViewProfile() {
           </button>
         </div>
       </div>
+
+      {/* Year Navigation */}
+      {!loadingYears && yearHierarchy && yearHierarchy.all_years && yearHierarchy.all_years.length > 1 && (
+        <div className="card" style={{ marginBottom: '1rem', padding: '1rem', background: '#f0f5ff', borderColor: '#d4e3ff' }}>
+          <div style={{ fontWeight: 700, color: '#2c3e50', marginBottom: '0.75rem', fontSize: '14px' }}>Available Years</div>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            {yearHierarchy.all_years.map((yr) => (
+              yr === numYear ? (
+                <span key={yr} className="btn btn-secondary" style={{ cursor: 'default', opacity: 1 }}>
+                  {yr} (current)
+                </span>
+              ) : (
+                <button
+                  key={yr}
+                  className="btn-link"
+                  onClick={() => navigate(`/profile/${encodeURIComponent(decodedName)}/${yr}`)}
+                  style={{ color: '#4183c4', fontWeight: 500, padding: '6px 12px', border: '1px solid #d4e3ff', borderRadius: '3px', background: 'white' }}
+                >
+                  {yr}
+                </button>
+              )
+            ))}
+          </div>
+        </div>
+      )}
 
       {regenMsg && <div className="alert alert-success" style={{ marginBottom: '1rem' }}>{regenMsg}</div>}
       {regenError && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>{regenError}</div>}

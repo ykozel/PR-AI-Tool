@@ -1,4 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
+import VersionBadge from './VersionBadge'
+import VersionInfo from './VersionInfo'
 import '../App.css'
 
 export default function Navigation() {
@@ -22,6 +24,10 @@ export default function Navigation() {
             </Link>
           </li>
         </ul>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          <VersionBadge />
+          <VersionInfo />
+        </div>
       </nav>
     </header>
   )

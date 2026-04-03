@@ -5,6 +5,8 @@ __pycache__/
 *.pyo
 *.pyd
 *.so
+*.egg
+.Python
 
 # ── Virtual environments ───────────────────────────────────────────────────────
 .venv/
@@ -38,6 +40,13 @@ coverage.xml
 htmlcov/
 *.coveragerc
 
+# ── Generated test data ────────────────────────────────────────────────────────
+test_docs/
+test_docs_new/
+# Scratch test files (not part of test suite)
+_test3.py
+test_unified_endpoint.py
+
 # ── Type-checker / linter caches ──────────────────────────────────────────────
 .mypy_cache/
 .ruff_cache/
@@ -55,6 +64,14 @@ MANIFEST
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 
 # ── OS artefacts ──────────────────────────────────────────────────────────────
 .DS_Store
@@ -70,7 +87,11 @@ node_modules/
 npm-debug.log*
 yarn-error.log*
 .vite/
+dist/
+.next/
+out/
 package-lock.json
+yarn.lock
 
 # ── Docker artefacts ──────────────────────────────────────────────────────────
 .dockerignore

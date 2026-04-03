@@ -183,6 +183,24 @@ class PRProfileRepository:
         self.db.refresh(profile)
         return profile
 
+    def get_all_years_for_employee(self, employee_name: str) -> List[int]:
+        """Return all review years for an employee, sorted ascending."""
+        rows = (
+            self.db.query(PRProfile.year)
+            .filter(PRProfile.employee_name == employee_name)
+            .order_by(PRProfile.year)
+            .all()
+        )
+        return [r[0] for r in rows]
+
+    def update_yoy_analysis(self, profile: PRProfile, yoy_json: str) -> PRProfile:
+        """Persist year-over-year analysis JSON on the profile."""
+        profile.yoy_analysis = yoy_json
+        self.db.add(profile)
+        self.db.commit()
+        self.db.refresh(profile)
+        return profile
+
     def list_all(self) -> List[PRProfile]:
         return (
             self.db.query(PRProfile)

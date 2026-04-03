@@ -1,7 +1,8 @@
 """API endpoints for building consolidated PR profiles from multiple uploaded documents."""
+import json
 import logging
 import re
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -17,6 +18,7 @@ from app.schemas.profile import ConsolidatedProfileResponse
 from app.services.doc_processor import DocProcessor
 from app.services.profile_consolidator import ProfileConsolidator
 from app.services.report_generator import ReportGenerator
+from app.services.year_over_year_analyzer import YearOverYearAnalyzer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/profiles", tags=["pr-profiles"])
@@ -32,6 +34,63 @@ _report_generator = ReportGenerator()
 
 def _safe_filename(name: str) -> str:
     return re.sub(r"[^\w\-]", "_", name)
+
+
+def _collect_report_context(
+    db: Session,
+    employee_name: str,
+    year: int,
+    current_files: List[UploadedFile],
+) -> tuple:
+    """Build (year_hierarchy, yoy_analysis) for generate_html().
+
+    year_hierarchy  – dict with current_year, all_years, person_name
+    yoy_analysis    – parsed JSON dict from YearOverYearAnalyzer, or None
+    """
+    repo = RepositoryFactory(db).get_pr_profile_repo()
+    all_years = repo.get_all_years_for_employee(employee_name)
+    year_hierarchy: Dict[str, Any] = {
+        "current_year": year,
+        "all_years": all_years,
+        "person_name": employee_name,
+    }
+
+    yoy_analysis: Optional[Dict[str, Any]] = None
+    prev_year = year - 1
+    if prev_year in all_years:
+        prev_profile = repo.get_by_name_year(employee_name, prev_year)
+        if prev_profile:
+            # Re-use persisted analysis when available
+            if prev_profile.yoy_analysis:
+                try:
+                    yoy_analysis = json.loads(prev_profile.yoy_analysis)
+                except Exception:
+                    pass
+            if yoy_analysis is None:
+                prev_files = (
+                    db.query(UploadedFile)
+                    .filter(
+                        UploadedFile.pr_profile_id == prev_profile.id,
+                        UploadedFile.extracted_text.isnot(None),
+                    )
+                    .all()
+                )
+                prev_text = " ".join(
+                    f.extracted_text for f in prev_files if f.extracted_text
+                )
+                curr_text = " ".join(
+                    f.extracted_text for f in current_files if f.extracted_text
+                )
+                if prev_text and curr_text:
+                    yoy_analysis = YearOverYearAnalyzer.analyze_year_comparison(
+                        employee_name=employee_name,
+                        previous_year=prev_year,
+                        current_year=year,
+                        previous_year_text=prev_text,
+                        current_year_text=curr_text,
+                    )
+
+    return year_hierarchy, yoy_analysis
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +166,38 @@ def get_profile_html(
     )
 
 
+@router.get(
+    "/years/{person_name}/{year}",
+    summary="Get year navigation hierarchy for a person",
+    description=(
+        "Returns all review years available for the given employee and marks the "
+        "requested year as current. Used by the frontend to render year navigation."
+    ),
+)
+def get_year_hierarchy(
+    person_name: str,
+    year: int,
+    db: Session = Depends(get_db),
+):
+    repo = RepositoryFactory(db).get_pr_profile_repo()
+    all_years = repo.get_all_years_for_employee(person_name)
+    return {
+        "person_name": person_name,
+        "current_year": year,
+        "all_years": all_years,
+        "previous_year": (year - 1) if (year - 1) in all_years else None,
+        "next_year": (year + 1) if (year + 1) in all_years else None,
+        "has_yoy_analysis": any(
+            bool(
+                db.query(PRProfile.yoy_analysis)
+                .filter(PRProfile.employee_name == person_name, PRProfile.year == year)
+                .scalar()
+            )
+            for _ in [1]
+        ),
+    }
+
+
 @router.post(
     "/html/{person_name}/{year}/regenerate",
     summary="Regenerate the HTML profile from all linked uploads",
@@ -149,16 +240,21 @@ def regenerate_profile_html(
         )
 
     try:
+        year_hierarchy, yoy_analysis = _collect_report_context(db, person_name, year, files)
         html = _report_generator.generate_html(
             file_records=files,
             employee_name=person_name,
             review_year=year,
+            year_hierarchy=year_hierarchy,
+            yoy_analysis=yoy_analysis,
         )
     except Exception as exc:
         logger.error(f"HTML regeneration failed for {person_name}/{year}: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Report generation failed: {exc}")
 
     profile.html_report = html
+    if yoy_analysis:
+        profile.yoy_analysis = json.dumps(yoy_analysis)
     db.add(profile)
     db.commit()
 
@@ -263,12 +359,17 @@ def rename_profile(
     )
     if files:
         try:
+            year_hierarchy, yoy_analysis = _collect_report_context(db, new_name, year, files)
             html = _report_generator.generate_html(
                 file_records=files,
                 employee_name=new_name,
                 review_year=year,
+                year_hierarchy=year_hierarchy,
+                yoy_analysis=yoy_analysis,
             )
             profile.html_report = html
+            if yoy_analysis:
+                profile.yoy_analysis = json.dumps(yoy_analysis)
             db.add(profile)
             db.commit()
         except Exception as exc:

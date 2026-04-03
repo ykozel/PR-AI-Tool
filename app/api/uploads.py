@@ -1,5 +1,6 @@
 ﻿"""API routes for file upload and processing (refactored with DI and utilities)"""
 import hashlib
+import json
 import logging
 import os
 from datetime import datetime
@@ -38,6 +39,8 @@ from app.services.document_processor import DocumentProcessor
 from app.services.ai_analyzer import AIAnalyzer
 from app.services.file_processing_orchestrator import FileProcessingOrchestrator
 from app.services.report_generator import ReportGenerator
+from app.services.year_over_year_analyzer import YearOverYearAnalyzer
+from app.api.profiles import _collect_report_context
 from app.utils.file_validation import FileValidator, FileOperations
 from app.utils.file_upload import FileUploadManager
 
@@ -203,12 +206,21 @@ async def upload_doc(
         if all_files:
             try:
                 generator = ReportGenerator()
+                year_hierarchy, yoy_analysis = _collect_report_context(
+                    db, person_name, review_year, all_files
+                )
                 html = generator.generate_html(
                     file_records=all_files,
                     employee_name=person_name,
                     review_year=review_year,
+                    year_hierarchy=year_hierarchy,
+                    yoy_analysis=yoy_analysis,
                 )
                 factory.get_pr_profile_repo().update_html(profile, html)
+                if yoy_analysis:
+                    profile.yoy_analysis = json.dumps(yoy_analysis)
+                    db.add(profile)
+                    db.commit()
                 html_updated = True
                 logger.info(
                     f"HTML report updated for {person_name} ({review_year}), "

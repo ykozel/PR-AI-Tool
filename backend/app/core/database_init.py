@@ -58,6 +58,17 @@ def _migrate_add_content_hash():
             pass  # Column already exists – nothing to do
 
 
+def _migrate_add_yoy_analysis():
+    """Add yoy_analysis column to pr_profiles if it doesn't exist yet."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE pr_profiles ADD COLUMN yoy_analysis TEXT"))
+            conn.commit()
+            logger.info("Added yoy_analysis column to pr_profiles")
+        except Exception:
+            pass  # Column already exists – nothing to do
+
+
 def init_db():
     """Initialize database - create all tables"""
     try:
@@ -66,6 +77,7 @@ def init_db():
         # Add new columns to existing tables (safe to call repeatedly)
         _migrate_add_employee_name()
         _migrate_add_content_hash()
+        _migrate_add_yoy_analysis()
 
         # Create all tables
         Base.metadata.create_all(bind=engine)

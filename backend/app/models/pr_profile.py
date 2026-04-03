@@ -27,6 +27,7 @@ class PRProfile(Base):
     # Comparison with previous year
     comparison_summary = Column(Text, nullable=True)
     new_achievements = Column(Text, nullable=True)
+    yoy_analysis = Column(Text, nullable=True)  # JSON from YearOverYearAnalyzer
     
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
