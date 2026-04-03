@@ -78,6 +78,27 @@ def _split_bullet_lines(text: str) -> List[str]:
     return lines
 
 
+# Keywords that indicate a line is likely a real certification entry
+_CERT_KEYWORDS = [
+    "certif", "accreditat", "licen", "credential", "aws ", "azure ", "gcp ", "pmp",
+    "cissp", "cisa", "scrum", "agile", "itil", "prince2", "togaf", "comptia",
+    "microsoft certified", "google cloud", "oracle certified", "bootcamp",
+    "course", "training", "workshop", "diploma", "degree",
+]
+
+
+def _looks_like_certification(line: str) -> bool:
+    """Return True only when a line plausibly represents a certification or training entry."""
+    lower = line.lower()
+    # Reject document metadata / section headers
+    if lower.startswith("[") or lower.startswith("performance review") or lower.startswith("role"):
+        return False
+    # Reject lines that are clearly person names or date ranges
+    if re.match(r"^(january|february|march|april|may|june|july|august|september|october|november|december)\b", lower):
+        return False
+    return any(kw in lower for kw in _CERT_KEYWORDS)
+
+
 def _split_sentences(text: str) -> List[str]:
     """Split text into individual sentences (for feedback quotes)."""
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
@@ -229,14 +250,14 @@ class ProfileConsolidator:
             certifications=combined_certs or None,
         )
 
-        skills_summary = self._build_skills_summary(ai_result, all_text)
+        skills_summary = self._build_skills_summary(ai_result, combined_skills_text)
 
         # ── 3. Certifications ───────────────────────────────────────────────
-        certifications = self._extract_certifications(combined_certs or all_text, ai_result)
+        certifications = self._extract_certifications(combined_certs, ai_result)
 
         # ── 4. Learning items ───────────────────────────────────────────────
-        # Pull learning from learning bucket first; supplement with full text scan
-        learning = self._extract_learning(combined_learning or all_text)
+        # Pull learning from dedicated learning/pdp bucket only — no all_text fallback
+        learning = self._extract_learning(combined_learning) if combined_learning else []
 
         # ── 5. Feedback (team + improvement) ───────────────────────────────
         feedback_summary = self._extract_feedback(
@@ -301,8 +322,12 @@ class ProfileConsolidator:
             else:
                 other.append(name)
 
-        # Parse raw skills text for lines that weren't caught by AI
+        # Parse raw skills text for lines that weren't caught by AI.
+        # Only accept short, item-like lines (not full feedback sentences).
         for line in _split_bullet_lines(raw_skills_text):
+            # Skip section-marker lines and long sentences
+            if line.startswith("[") or len(line) > 80:
+                continue
             line_lower = line.lower()
             if any(h in line_lower for h in _LANGUAGE_HINTS):
                 if line not in languages:
@@ -336,16 +361,11 @@ class ProfileConsolidator:
             if skill.category == SkillCategory.CERTIFICATIONS:
                 certs.append(skill.skill_name)
 
-        # From raw text
-        for line in _split_bullet_lines(certs_text):
-            if line not in certs:
-                certs.append(line)
-
-        if not certs and certs_text:
-            # The whole section is a single "not applicable" note
-            processed = certs_text.strip()[:300]
-            if processed:
-                certs.append(processed)
+        # From raw text – only lines that look like actual certifications
+        if certs_text:
+            for line in _split_bullet_lines(certs_text):
+                if line not in certs and _looks_like_certification(line):
+                    certs.append(line)
 
         return _dedupe(certs) or ["Not applicable / not a focus during this review period"]
 

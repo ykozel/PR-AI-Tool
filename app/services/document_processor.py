@@ -54,9 +54,10 @@ class SectionExtractor:
 
     def _extract_numbered_sections(self, text: str) -> List[ExtractedSection]:
         """Extract any explicitly numbered sections (e.g. 1. Title, 2. Title ...)."""
-        # Matches any positive integer followed by optional separator and a title
+        # Require a separator (. : )) FOLLOWED BY whitespace so that titles such as
+        # "1-Year Goal" or "3-Year Goal" are NOT mistaken for numbered sections.
         section_pattern = re.compile(
-            r'(?:^|\n)\s*(\d+)\s*[\.\:\-]?\s*(.+?)(?=\n\s*\d+\s*[\.\:\-]|\Z)',
+            r'(?:^|\n)\s*(\d+)\s*[\.\.\:\)]\s+(.+?)(?=\n\s*\d+\s*[\.\.\:\)]\s|\Z)',
             re.DOTALL
         )
         sections = []

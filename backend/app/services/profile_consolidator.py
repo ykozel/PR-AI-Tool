@@ -229,14 +229,14 @@ class ProfileConsolidator:
             certifications=combined_certs or None,
         )
 
-        skills_summary = self._build_skills_summary(ai_result, all_text)
+        skills_summary = self._build_skills_summary(ai_result, combined_skills_text)
 
         # ── 3. Certifications ───────────────────────────────────────────────
-        certifications = self._extract_certifications(combined_certs or all_text, ai_result)
+        certifications = self._extract_certifications(combined_certs, ai_result)
 
         # ── 4. Learning items ───────────────────────────────────────────────
-        # Pull learning from learning bucket first; supplement with full text scan
-        learning = self._extract_learning(combined_learning or all_text)
+        # Pull learning from dedicated learning/pdp bucket only — no all_text fallback
+        learning = self._extract_learning(combined_learning) if combined_learning else []
 
         # ── 5. Feedback (team + improvement) ───────────────────────────────
         feedback_summary = self._extract_feedback(
@@ -301,8 +301,12 @@ class ProfileConsolidator:
             else:
                 other.append(name)
 
-        # Parse raw skills text for lines that weren't caught by AI
+        # Parse raw skills text for lines that weren't caught by AI.
+        # Only accept short, item-like lines (not full feedback sentences).
         for line in _split_bullet_lines(raw_skills_text):
+            # Skip section-marker lines and long sentences
+            if line.startswith("[") or len(line) > 80:
+                continue
             line_lower = line.lower()
             if any(h in line_lower for h in _LANGUAGE_HINTS):
                 if line not in languages:

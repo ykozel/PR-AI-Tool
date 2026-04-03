@@ -134,7 +134,7 @@ No login is required at this time. All endpoints are publicly accessible within 
 
 | ID | Requirement |
 |---|---|
-| UR-26 | When an OpenAI API key is configured the report generation MUST use GPT-4 (or the configured model) for intelligent section extraction and allocation. |
+| UR-26 | When an OpenAI API key is configured the report generation MUST use GPT-4o (or the configured model) for intelligent section extraction and allocation. |
 | UR-27 | When no API key is configured the system MUST fall back to pattern-based (keyword/regex) extraction silently—no error is surfaced to the caller. |
 | UR-28 | Users MAY request on-demand AI skill and achievement analysis for any uploaded file. |
 | UR-29 | Skill analysis MUST return confidence scores and a development recommendations list. |
@@ -436,14 +436,17 @@ These endpoints are intended for developers and integrations needing lower-level
 
 The generated report is structured as follows. Every section draws from **all** linked documents regardless of `upload_type`.
 
-| Section | What it contains |
-|---|---|
-| **Skills Summary** | Technical languages, domain expertise, automation/tooling, practices |
-| **Certifications** | Certificates listed, pursued, or mentioned across all documents |
-| **Learning** | Courses and training items, grouped by year |
-| **Feedback** | One subsection per upload (labelled by type and numbered if multiple); contains quotes and paraphrased observations |
-| **Areas for Improvement** | Development gaps from PDPs, feedback notes, and self-assessments |
-| **Activity** | Projects and initiatives extracted from project docs and inferred from feedback |
+| Section | What it contains | Presence |
+|---|---|---|
+| **Skills Summary** | Technical languages, domain expertise, automation/tooling, practices and methodologies | Always |
+| **Certifications** | Certificates listed, pursued, or mentioned across all documents | Always |
+| **Learning** | Courses and training items, grouped by year | Always |
+| **Feedback** | One subsection per feedback upload (labelled by type, numbered if multiple); content reproduced **verbatim** from the original document, formatted as structured blocks (metadata grid, ratings list, attributed quotes) | When feedback documents are present |
+| **Activity** | Projects and initiatives extracted from project docs and inferred from feedback | Always |
+| **Achievements** | GPT-synthesised 2–3 sentence narrative of the person's key achievements, plus a bullet list of concrete highlights with metrics where available | Always |
+| **Fallbacks** | GPT-synthesised list of development areas, growth suggestions, and improvement notes collected from all documents | When improvement notes are found |
+| **Achievements over a year** | LLM-powered comparison of current vs previous year: new achievements, new skills, skill progression, growth areas, promotion/role changes, overall assessment | When a previous-year profile exists |
+| **What went wrong and needs to be improved** | LLM-identified concerns from the year-over-year comparison: areas of regression, unmet goals, feedback gaps, and priority improvement actions | When concerns are found in the YoY analysis |
 
 The report layout mimics a two-panel documentation layout (fixed table-of-contents on the left, content on the right) and contains only inline CSS—no external stylesheets or scripts.
 

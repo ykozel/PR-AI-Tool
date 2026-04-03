@@ -4,100 +4,149 @@
 
 ```
 pr-profile/
-├── backend/
+├── backend/                       # ◄ The running application server
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py                 # FastAPI application factory
-│   │   ├── api/                    # API routes (to be implemented)
-│   │   │   └── __init__.py
-│   │   ├── core/                   # Configuration & utilities
-│   │   │   ├── __init__.py
-│   │   │   ├── config.py           # Settings from environment
-│   │   │   ├── database.py         # SQLAlchemy engine & session
-│   │   │   └── security.py         # JWT & password utilities
-│   │   ├── models/                 # SQLAlchemy ORM models
-│   │   │   ├── __init__.py
-│   │   │   ├── user.py             # User (Employee, Manager, Colleague)
-│   │   │   ├── pr_profile.py       # Annual PR Profile record
-│   │   │   ├── feedback.py         # Feedback from all sources
-│   │   │   ├── project_activity.py # Project details
-│   │   │   └── function_activity.py# Company function details
-│   │   ├── schemas/                # Pydantic request/response models
-│   │   │   └── __init__.py
-│   │   ├── services/               # Business logic services
-│   │   │   └── __init__.py
-│   │   └── utils/                  # Utilities
-│   │       └── __init__.py
+│   │   ├── main.py                # FastAPI application factory + lifespan
+│   │   ├── api/                   # HTTP route handlers
+│   │   │   ├── uploads.py         # POST /api/uploads/doc  (primary upload flow)
+│   │   │   ├── profiles.py        # GET/POST /api/profiles/ (list, HTML, regenerate, rename)
+│   │   │   ├── documents.py       # POST /api/documents/   (section extraction)
+│   │   │   ├── ai_analysis.py     # POST /api/ai/          (on-demand AI analysis)
+│   │   │   └── info.py            # GET  /api/info/        (version, health)
+│   │   ├── core/
+│   │   │   ├── config.py          # Pydantic Settings (reads .env)
+│   │   │   ├── constants.py       # UploadType enum, _FEEDBACK_TYPES, MAX_FILE_SIZE_MB
+│   │   │   ├── database.py        # SQLAlchemy engine, session factory, get_db()
+│   │   │   ├── database_init.py   # Alembic-free schema creation on startup
+│   │   │   ├── repositories.py    # Data-access objects (PRProfileRepository, etc.)
+│   │   │   ├── security.py        # JWT utilities (not enforced in current build)
+│   │   │   ├── error_handler.py   # Centralised exception → HTTP response mapping
+│   │   │   └── version.py         # App version string
+│   │   ├── models/                # SQLAlchemy ORM models
+│   │   │   ├── pr_profile.py      # PRProfile: (employee_name, year, html_report, yoy_analysis)
+│   │   │   ├── file.py            # UploadedFile: text, hash, file_type, status
+│   │   │   ├── user.py            # User (scaffolded; not enforced)
+│   │   │   ├── feedback.py        # Feedback (scaffolded)
+│   │   │   ├── project_activity.py
+│   │   │   └── function_activity.py
+│   │   ├── schemas/               # Pydantic request/response models
+│   │   │   ├── file_upload.py     # SmartUploadResponse, UploadTypeEnum, …
+│   │   │   ├── profile.py         # ConsolidatedProfileResponse
+│   │   │   ├── ai_analysis.py     # SkillAnalysis, AchievementAnalysis, …
+│   │   │   └── document_processing.py
+│   │   ├── services/              # Business-logic layer
+│   │   │   ├── report_generator.py          # HTML report builder (LLM + verbatim feedback)
+│   │   │   ├── profile_consolidator.py      # Pattern-based fallback extraction
+│   │   │   ├── ai_analyzer.py               # On-demand skill/achievement AI analysis
+│   │   │   ├── doc_processor.py             # .doc/.docx → plain text (python-docx / antiword)
+│   │   │   ├── document_processor.py        # Section-level extraction from plain text
+│   │   │   ├── file_processing_orchestrator.py  # Upload pipeline coordinator
+│   │   │   ├── year_over_year_analyzer.py   # LLM year-over-year comparison
+│   │   │   └── pdf_processor.py             # PDF stub (not used in current build)
+│   │   └── utils/
+│   │       ├── file_validation.py   # Magic-byte checks, secure_filename, save helpers
+│   │       └── file_upload.py       # FileUploadManager (disk I/O helpers)
 │   ├── tests/
-│   │   ├── __init__.py
-│   │   ├── conftest.py            # Pytest configuration
-│   │   └── test_main.py           # Sample tests
-│   ├── main.py                    # Application entry point
-│   └── requirements.txt           # Python dependencies
+│   │   ├── conftest.py
+│   │   ├── test_main.py
+│   │   ├── test_upload.py
+│   │   ├── test_ai_analyzer.py
+│   │   └── test_document_processing.py
+│   ├── uploads/                   # Uploaded .docx files saved to disk
+│   ├── run.py                     # `python run.py` entry point
+│   └── requirements.txt
 │
-├── frontend/
-│   ├── public/
-│   │   └── index.html             # HTML template
+├── app/                           # Mirror of backend/app/ — kept in sync
+│   └── …                          # (same structure as backend/app/)
+│
+├── frontend/                      # React + Vite SPA
 │   ├── src/
 │   │   ├── components/
-│   │   │   └── Navigation.jsx      # App navigation
+│   │   │   ├── Navigation.jsx     # Top nav bar
+│   │   │   ├── VersionBadge.jsx   # Displays app version
+│   │   │   └── VersionInfo.jsx    # Detailed version info panel
 │   │   ├── pages/
-│   │   │   ├── Dashboard.jsx       # Main dashboard
-│   │   │   ├── SubmitFeedback.jsx  # Feedback submission
-│   │   │   └── ViewProfile.jsx     # Profile view
+│   │   │   ├── Dashboard.jsx      # Profile list, download buttons
+│   │   │   ├── SubmitFeedback.jsx # Upload form (name, year, type, file)
+│   │   │   └── ViewProfile.jsx    # Inline HTML report preview + download
 │   │   ├── services/
-│   │   │   └── api.js             # Axios client + API methods
+│   │   │   └── api.js             # Axios client, all API call helpers
 │   │   ├── hooks/
-│   │   │   ├── useAuth.js         # Auth state management
-│   │   │   └── useApi.js          # API call hook
-│   │   ├── styles/                # CSS/SCSS files
-│   │   ├── main.jsx               # React entry point
-│   │   ├── App.jsx                # App wrapper with routing
-│   │   ├── App.css                # Main styles
-│   │   └── index.css              # Global styles
-│   ├── .env.development           # Dev environment variables
-│   ├── .env.production            # Prod environment variables
-│   ├── package.json               # Node dependencies & scripts
-│   └── vite.config.js             # Vite configuration
+│   │   │   ├── useApi.js          # Generic API call hook
+│   │   │   └── useAuth.js         # Auth state (scaffolded)
+│   │   ├── App.jsx                # React Router wrapper
+│   │   └── main.jsx               # Vite entry point
+│   ├── package.json
+│   └── vite.config.js             # Dev proxy: /api/* → localhost:8000
 │
-├── .env.example                   # Environment template
-├── .gitignore                     # Git ignore rules
-├── .dockerignore                  # Docker ignore rules
+├── test_docs_comprehensive/       # Test .docx documents for 3 personas
+│   ├── 13_Elena_Rodriguez_2025_ClientFeedback.docx
+│   ├── 13_Elena_Rodriguez_2025_PDP.docx
+│   ├── 13_Elena_Rodriguez_2025_ProjectFeedback.docx
+│   ├── 14_James_Park_2025_ClientFeedback.docx
+│   ├── 14_James_Park_2025_PDP.docx
+│   ├── 14_James_Park_2025_ProjectFeedback.docx
+│   ├── 15_Priya_Sharma_2025_ClientFeedback.docx
+│   ├── 15_Priya_Sharma_2025_PDP.docx
+│   ├── 15_Priya_Sharma_2025_ProjectFeedback.docx
+│   └── README.md
+│
+├── tests/                         # Root-level tests (mirror backend/tests/)
+├── .env                           # Local secrets (not committed)
+├── .env.example                   # Environment variable template
+├── docker-compose.yml             # Backend + SQLite service orchestration
 ├── Dockerfile                     # Backend container image
-├── docker-compose.yml             # Service orchestration
+├── generate_test_dataset_comprehensive.py  # Generates test .docx files
 ├── README.md                      # Project documentation
-└── STRUCTURE.md                   # This file
-
+├── STRUCTURE.md                   # This file
+└── USER_REQUIREMENTS.md           # Functional requirements specification
 ```
+
+---
 
 ## 🗄️ Database Schema
 
-### Tables
-- **users**: Employee, Manager, Colleague accounts
-  - Roles: employee, manager, colleague
-  
-- **pr_profiles**: Annual performance review records
-  - Links to users (employee_id)
-  - Year-based records
-  
-- **feedback**: Feedback from all three sources
-  - Sources: project, self, function
-  - Contains all obligatory sections
-  - Submitted by different users
-  
-- **project_activities**: Project-specific data
-  - Project name, responsibilities, contributions
-  
-- **function_activities**: Company function data
-  - Function name, activities, contributions
+The database is SQLite by default (`pr_profile.db`). Schema is created automatically on startup via `database_init.py`.
+
+### Key tables
+
+| Table | Primary use |
+|---|---|
+| **pr_profiles** | One row per `(employee_name, year)`. Stores `html_report` (TEXT) and `yoy_analysis` (TEXT, JSON). |
+| **uploaded_files** | One row per uploaded document. Stores `extracted_text`, `file_type` (upload type), `content_hash` (SHA-256 for dedup), `status`. |
+| **users** | Scaffolded user accounts (not enforced in current build). |
+| **feedback** | Scaffolded feedback records (data stored in `uploaded_files` instead). |
+| **project_activities** | Project detail records. |
+| **function_activities** | Company function detail records. |
+
+---
+
+## 🌐 API Surface
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/uploads/doc` | **Primary upload**: upload .docx → generate/update HTML |
+| `GET` | `/api/profiles/` | List all profiles |
+| `GET` | `/api/profiles/html/{name}/{year}` | Download HTML report |
+| `POST` | `/api/profiles/html/{name}/{year}/regenerate` | Force regenerate HTML |
+| `POST` | `/api/profiles/html/{name}/{year}/rename` | Rename / merge profile |
+| `POST` | `/api/documents/process/{upload_id}` | Re-extract sections from an upload |
+| `POST` | `/api/documents/bulk-process` | Bulk section extraction |
+| `POST` | `/api/ai/analyze/{upload_id}` | On-demand AI skill/achievement analysis |
+| `GET` | `/api/ai/skills/{upload_id}` | Get extracted skills |
+| `GET` | `/api/ai/achievements/{upload_id}` | Get extracted achievements |
+
+Full interactive documentation: **http://localhost:8000/docs**
+
+---
 
 ## 🚀 Frontend Routes
 
 | Route | Component | Purpose |
-|-------|-----------|---------|
-| `/` | Dashboard | Main page, list profiles |
-| `/submit-feedback` | SubmitFeedback | Upload PDF feedback forms |
-| `/profile/:year` | ViewProfile | View annual PR profile |
+|---|---|---|
+| `/` | Dashboard | List all profiles; download HTML reports |
+| `/submit-feedback` | SubmitFeedback | Upload a `.docx` document |
+| `/profile/:name/:year` | ViewProfile | Preview HTML report inline; regenerate; rename |
 
 ## 📡 API Endpoints (To Be Implemented)
 

@@ -220,17 +220,19 @@ class AIAnalyzer:
         skills = []
         project_lower = project_activity.lower()
         
-        # Extract technical skills
+        # Extract technical skills — use word boundaries to avoid substring false-positives
+        # (e.g. "ai" inside "Automation" or "main"). Record each category at most once.
         for tech_category, keywords in self.TECHNICAL_SKILLS.items():
             for keyword in keywords:
-                if keyword in project_lower:
+                if re.search(r'\b' + re.escape(keyword) + r'\b', project_lower):
                     skills.append(IdentifiedSkill(
-                        skill_name=f"{tech_category} ({keyword.title()})",
+                        skill_name=tech_category,
                         category=SkillCategory.TECHNICAL,
                         confidence=0.85,
                         source_section='project_activity',
                         evidence=[self._extract_quote(project_activity, keyword)]
                     ))
+                    break  # one entry per category is enough
         
         # Extract domain skills (project-specific)
         domain_pattern = r'(?:project|initiative|system|platform)\s+(?:for|of|in)\s+([^\s,]+(?:\s+[^\s,]+)?)'
